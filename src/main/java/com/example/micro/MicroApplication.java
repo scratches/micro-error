@@ -15,19 +15,29 @@
  */
 package com.example.micro;
 
+import org.springframework.boot.autoconfigure.web.ErrorProperties;
+import org.springframework.boot.autoconfigure.web.ResourceProperties;
+import org.springframework.boot.autoconfigure.web.reactive.error.DefaultErrorWebExceptionHandler;
 import org.springframework.boot.logging.LogFile;
 import org.springframework.boot.logging.LoggingInitializationContext;
 import org.springframework.boot.logging.LoggingSystem;
+import org.springframework.boot.web.reactive.error.DefaultErrorAttributes;
+import org.springframework.boot.web.reactive.error.ErrorAttributes;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.SimpleCommandLinePropertySource;
+import org.springframework.http.codec.ServerCodecConfigurer;
+import org.springframework.http.server.reactive.HttpHandler;
+import org.springframework.web.reactive.function.server.HandlerStrategies;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
-import org.springframework.web.server.WebHandler;
+import org.springframework.web.server.WebExceptionHandler;
 
 import static org.springframework.web.reactive.function.server.RequestPredicates.GET;
 import static org.springframework.web.reactive.function.server.RequestPredicates.POST;
 import static org.springframework.web.reactive.function.server.ServerResponse.ok;
 
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 /**
@@ -38,14 +48,16 @@ public class MicroApplication {
 
 	public static void main(String[] args) throws Exception {
 		long t0 = System.currentTimeMillis();
-		new MicroApplication().run();
+		new MicroApplication().run(args);
 		System.err.println(
 				"Started HttpServer: " + (System.currentTimeMillis() - t0) + "ms");
 	}
 
-	public GenericApplicationContext run() {
+	public GenericApplicationContext run(String... args) {
 		GenericApplicationContext context = new GenericApplicationContext();
 		ConfigurableEnvironment environment = context.getEnvironment();
+		environment.getPropertySources()
+				.addFirst(new SimpleCommandLinePropertySource("commandLine", args));
 		String logConfig = environment.resolvePlaceholders("${logging.config:}");
 		LogFile logFile = LogFile.get(environment);
 		LoggingSystem.get(getClass().getClassLoader()).initialize(
@@ -54,15 +66,51 @@ public class MicroApplication {
 				() -> RouterFunctions
 						.route(GET("/"),
 								request -> ok().body(Mono.just("Hello"), String.class))
+						.andRoute(GET("/boom"),
+								request -> ok().body(
+										Flux.<String>error(
+												new IllegalStateException("Planned")),
+										String.class))
 						.andRoute(POST("/"),
 								request -> ok().body(
 										request.bodyToMono(String.class)
 												.map(value -> value.toUpperCase()),
 										String.class)));
-		context.registerBean("webHandler", WebHandler.class, () -> RouterFunctions
-				.toWebHandler(context.getBean(RouterFunction.class)));
+		context.registerBean(DefaultErrorWebExceptionHandler.class,
+				() -> errorHandler(context));
+		context.registerBean(ErrorAttributes.class, () -> new DefaultErrorAttributes());
+		context.registerBean(ErrorProperties.class, () -> new ErrorProperties());
+		context.registerBean(ResourceProperties.class, () -> new ResourceProperties());
+		context.registerBean(HttpHandler.class,
+				() -> httpHandler(context));
 		context.addApplicationListener(new ServerListener(context));
 		context.refresh();
 		return context;
 	}
+
+	/**
+	 * @param context
+	 * @return
+	 */
+	public HttpHandler httpHandler(GenericApplicationContext context) {
+		return RouterFunctions.toHttpHandler(context.getBean(RouterFunction.class),
+				HandlerStrategies.empty()
+						.exceptionHandler(
+								context.getBean(WebExceptionHandler.class))
+						.codecs(config -> config.registerDefaults(true))
+						.build());
+	}
+
+	private DefaultErrorWebExceptionHandler errorHandler(
+			GenericApplicationContext context) {
+		DefaultErrorWebExceptionHandler handler = new DefaultErrorWebExceptionHandler(
+				context.getBean(ErrorAttributes.class),
+				context.getBean(ResourceProperties.class),
+				context.getBean(ErrorProperties.class), context);
+		ServerCodecConfigurer codecs = ServerCodecConfigurer.create();
+		handler.setMessageWriters(codecs.getWriters());
+		handler.setMessageReaders(codecs.getReaders());
+		return handler;
+	}
+
 }

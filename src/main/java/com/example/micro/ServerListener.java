@@ -30,7 +30,6 @@ import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.http.server.reactive.HttpHandler;
 import org.springframework.http.server.reactive.ReactorHttpHandlerAdapter;
 import org.springframework.util.ClassUtils;
-import org.springframework.web.server.adapter.WebHttpHandlerBuilder;
 
 import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
@@ -64,8 +63,7 @@ public class ServerListener implements SmartApplicationListener {
 		Integer port = Integer.valueOf(context.getEnvironment()
 				.resolvePlaceholders("${server.port:${PORT:8080}}"));
 		if (port >= 0) {
-			HttpHandler handler = WebHttpHandlerBuilder.applicationContext(context)
-					.build();
+			HttpHandler handler = context.getBean(HttpHandler.class);
 			ReactorHttpHandlerAdapter adapter = new ReactorHttpHandlerAdapter(handler);
 			HttpServer httpServer = HttpServer.create().host("localhost").port(port)
 					.handle(adapter);

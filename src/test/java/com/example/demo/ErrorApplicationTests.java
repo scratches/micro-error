@@ -32,4 +32,9 @@ public class ErrorApplicationTests {
 				.expectBody(String.class).value(containsString("status"));
 	}
 
+	@Test
+	public void boom() throws Exception {
+		client.get().uri("/boom").exchange().expectStatus().is5xxServerError()
+				.expectBody(String.class).value(containsString("status"));
+	}
 }
