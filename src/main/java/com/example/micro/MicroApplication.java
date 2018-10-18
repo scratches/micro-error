@@ -78,9 +78,6 @@ public class MicroApplication {
 										String.class)));
 		context.registerBean(DefaultErrorWebExceptionHandler.class,
 				() -> errorHandler(context));
-		context.registerBean(ErrorAttributes.class, () -> new DefaultErrorAttributes());
-		context.registerBean(ErrorProperties.class, () -> new ErrorProperties());
-		context.registerBean(ResourceProperties.class, () -> new ResourceProperties());
 		context.registerBean(HttpHandler.class,
 				() -> httpHandler(context));
 		context.addApplicationListener(new ServerListener(context));
@@ -88,11 +85,7 @@ public class MicroApplication {
 		return context;
 	}
 
-	/**
-	 * @param context
-	 * @return
-	 */
-	public HttpHandler httpHandler(GenericApplicationContext context) {
+	private HttpHandler httpHandler(GenericApplicationContext context) {
 		return RouterFunctions.toHttpHandler(context.getBean(RouterFunction.class),
 				HandlerStrategies.empty()
 						.exceptionHandler(
@@ -103,6 +96,9 @@ public class MicroApplication {
 
 	private DefaultErrorWebExceptionHandler errorHandler(
 			GenericApplicationContext context) {
+		context.registerBean(ErrorAttributes.class, () -> new DefaultErrorAttributes());
+		context.registerBean(ErrorProperties.class, () -> new ErrorProperties());
+		context.registerBean(ResourceProperties.class, () -> new ResourceProperties());
 		DefaultErrorWebExceptionHandler handler = new DefaultErrorWebExceptionHandler(
 				context.getBean(ErrorAttributes.class),
 				context.getBean(ResourceProperties.class),
