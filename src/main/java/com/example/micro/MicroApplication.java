@@ -27,11 +27,12 @@ import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.SimpleCommandLinePropertySource;
 import org.springframework.http.codec.ServerCodecConfigurer;
-import org.springframework.http.server.reactive.HttpHandler;
 import org.springframework.web.reactive.function.server.HandlerStrategies;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.server.WebExceptionHandler;
+import org.springframework.web.server.adapter.HttpWebHandlerAdapter;
+import org.springframework.web.server.adapter.WebHttpHandlerBuilder;
 
 import static org.springframework.web.reactive.function.server.RequestPredicates.GET;
 import static org.springframework.web.reactive.function.server.RequestPredicates.POST;
@@ -78,20 +79,19 @@ public class MicroApplication {
 										String.class)));
 		context.registerBean(DefaultErrorWebExceptionHandler.class,
 				() -> errorHandler(context));
-		context.registerBean(HttpHandler.class,
-				() -> httpHandler(context));
+		context.registerBean(WebHttpHandlerBuilder.WEB_HANDLER_BEAN_NAME,
+				HttpWebHandlerAdapter.class, () -> httpHandler(context));
 		context.addApplicationListener(new ServerListener(context));
 		context.refresh();
 		return context;
 	}
 
-	private HttpHandler httpHandler(GenericApplicationContext context) {
-		return RouterFunctions.toHttpHandler(context.getBean(RouterFunction.class),
+	private HttpWebHandlerAdapter httpHandler(GenericApplicationContext context) {
+		return (HttpWebHandlerAdapter) RouterFunctions.toHttpHandler(
+				context.getBean(RouterFunction.class),
 				HandlerStrategies.empty()
-						.exceptionHandler(
-								context.getBean(WebExceptionHandler.class))
-						.codecs(config -> config.registerDefaults(true))
-						.build());
+						.exceptionHandler(context.getBean(WebExceptionHandler.class))
+						.codecs(config -> config.registerDefaults(true)).build());
 	}
 
 	private DefaultErrorWebExceptionHandler errorHandler(
